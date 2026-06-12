@@ -1,365 +1,176 @@
 import os
-import re
-from pathlib import PureWindowsPath
 import numpy as np
 import pandas as pd
-import seaborn as sns
+import matplotlib
 import matplotlib.pyplot as plt
+import seaborn as sns
 from matplotlib.lines import Line2D
-
-sns.set_theme(style="white", context="notebook")
 
 # ============================================================================
 # FIGURE SETTINGS
 # ============================================================================
+sns.set_theme(style="white", context="notebook")
 font = {'family': 'arial', 'weight': 'normal', 'size': 8}
 matplotlib.rc('font', **font)
 plt.rcParams['svg.fonttype'] = 'none'
 plt.rcParams['figure.dpi'] = 300
-cm = 1/2.54
+cm = 1 / 2.54
 
-def _dedupe_columns(cols):
-    new_cols, seen = [], {}
-    for c in cols:
-        if c in seen:
-            seen[c] += 1
-            new_cols.append(f"{c}_{seen[c]}")
-        else:
-            seen[c] = 0
-            new_cols.append(c)
-    return new_cols
+# ============================================================================
+# PATHS
+# ============================================================================
+root_path = open('experimental_data/experiment_index.txt', 'r').readlines()[0].strip()
+output_folder = f'{root_path}Figures/'
+os.makedirs(output_folder, exist_ok=True)
 
-def _read_one_fcs(file_path, sample_label=None):
-    df = pd.read_excel(file_path, skiprows=1)
-    df.columns = _dedupe_columns(df.columns)
-
-    fit_cols = [c for c in df.columns
-                if (('Fit Channel 1' in c or 'Fit Channel 2' in c or 'Fit Channel 1 -> 2' in c)
-                    and 'Residuals Channel' not in c)]
-    keep = ['Time [ms]'] + fit_cols
-    df = df[keep]
-
-   
-    label_map = {
-        'Fit Channel 1': 'Fit/Green channel 1',
-        'Fit Channel 2': 'Fit/Red channel 2',
-        'Fit Channel 1 -> 2': 'Fit channel 1>2',
-    }
-
-    long_parts = []
-    for key in ['Fit Channel 1', 'Fit Channel 2', 'Fit Channel 1 -> 2']:
-        if key == 'Fit Channel 1 -> 2':
-            cols = ['Time [ms]'] + [c for c in df.columns if 'Fit Channel 1 -> 2' in c]
-        else:
-            cols = ['Time [ms]'] + [c for c in df.columns if (key in c and '->' not in c)]
-        if len(cols) == 1:
-            continue
-        sub = df[cols].melt(id_vars='Time [ms]', var_name='Replicate', value_name='Value')
-        sub['Channel'] = label_map[key]
-        long_parts.append(sub)
-
-    long_df = pd.concat(long_parts, ignore_index=True) if long_parts else pd.DataFrame()
-
-    
-    p = PureWindowsPath(file_path)
-    m = re.search(r'(20\d{6})', str(p))
-    date = m.group(1) if m else 'unknown'
-
-    lower = str(p).lower()
-    location = 'well' if 'well' in lower else 'dibbot'
-    fname = p.name.lower()
-
-    if 'dendra' in fname and 'mcherry' in fname:
-        sample = 'Dendra+mCherry'
-    elif 'fl1' in fname:
-        sample = 'FL1'
-    elif any(x in fname for x in ['ut', 'untransfected', '-vecontrol', 'negative']):
-        sample = 'UT/Control'
-    else:
-        sample = sample_label or 'Unknown'
-
-    if not long_df.empty:
-        long_df['Date'] = date
-        long_df['Location'] = location.capitalize() 
-        long_df['Sample'] = sample
-        long_df['File'] = str(p) 
-
-    return long_df
-
-
-manifest = []
-# 250512
-manifest += [
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250512/250512_dibbot_Dendra+mCherry_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250512/250512_dibbot_FL1_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250512/250512_dibbot_UT_curve.xlsx', None),
-]
-# 250514
-manifest += [
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250514/FCCS/250514_dibbot_dendra+mCherry_droplet_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250514/FCCS/250514_dibbot_FL1_CellLysate_droplet_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250514/FCCS/250514_well_dendra+mCherry_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250514/FCCS/250514_well_FL1_CellLysate_droplet_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250514/FCCS/250514_well_UT_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250514/FCCS/250514_dibbot_-veControl_PeglipidOil.xlsx', 'UT/Control'),
-]
-# 250527
-manifest += [
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250527/FCCS/250527_dibbot_dendra+mcherry_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250527/FCCS/250527_dibbot_FL1_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250527/FCCS/250527_dibbot_ut_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250527/FCCS/250527_well_dendra+mcherry_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250527/FCCS/250527_well_FL1_curve.xlsx', None),
-    ('C:/Users/trowy/OneDrive/Desktop/2024 and 2025 PhD/Python/250527/FCCS/250527_well_ut_curve.xlsx', None),
+# --- LIST YOUR DATA FILES HERE (relative to root_path) --------------------
+# Each entry: (relative_path, optional_sample_label)
+# sample_label only needed if filename doesn't contain a recognisable tag
+manifest = [
+    # 250512
+    ('250512_dibbot_Dendra+mCherry_curve_tidy.xlsx', None),
+    ('250512_dibbot_FL1_curve_tidy.xlsx',            None),
+    ('250512_dibbot_UT_curve_tidy.xlsx',             None),
+    # 250514
+    ('250514_dibbot_dendra+mCherry_droplet_curve_tidy.xlsx',      None),
+    ('250514_dibbot_FL1_CellLysate_droplet_curve_tidy.xlsx',      None),
+    ('250514_well_dendra+mCherry_curve_tidy.xlsx',                None),
+    ('250514_well_FL1_CellLysate_droplet_curve_tidy.xlsx',        None),
+    ('250514_well_UT_curve_tidy.xlsx',                            None),
+    ('250514_dibbot_-veControl_PeglipidOil_tidy.xlsx',            'UT/Control'),
+    # 250527
+    ('250527_dibbot_dendra+mcherry_curve_tidy.xlsx', None),
+    ('250527_dibbot_FL1_curve_tidy.xlsx',            None),
+    ('250527_dibbot_ut_curve_tidy.xlsx',             None),
+    ('250527_well_dendra+mcherry_curve_tidy.xlsx',   None),
+    ('250527_well_FL1_curve_tidy.xlsx',              None),
+    ('250527_well_ut_curve_tidy.xlsx',               None),
 ]
 
+# ============================================================================
+# LOAD & AGGREGATE DATA
+# ============================================================================
+all_long_list = []
+for rel_path, lbl in manifest:
+    fp = os.path.join(root_path, rel_path)
+    df = pd.read_excel(fp)
+    if lbl is not None:
+        df['Sample'] = lbl
+    if not df.empty:
+        all_long_list.append(df)
 
-all_long_list = [_read_one_fcs(fp, lbl) for fp, lbl in manifest]
-all_long = pd.concat([df for df in all_long_list if df is not None and not df.empty], ignore_index=True)
+all_long = pd.concat(all_long_list, ignore_index=True)
 
-avg_simple = (all_long
-              .groupby(['Sample', 'Location', 'Channel', 'Time [ms]'], as_index=False)
-              .agg(mean=('Value', 'mean'), sd=('Value', 'std')))
-
+# Per-file means (biological replicate = one file)
 per_file = (all_long
             .groupby(['File', 'Sample', 'Location', 'Channel', 'Time [ms]'], as_index=False)
             .agg(file_mean=('Value', 'mean')))
+
+# Bio-rep mean ± SD across files
 avg_biorep = (per_file
               .groupby(['Sample', 'Location', 'Channel', 'Time [ms]'], as_index=False)
               .agg(mean=('file_mean', 'mean'),
                    sd=('file_mean', 'std'),
                    n_bioreps=('file_mean', 'count')))
 
+# ============================================================================
+# CLEAN LABELS
+# ============================================================================
+# Rename channels for display
+channel_labels = {
+    'Fit/Green channel 1': 'Green autocorrelation',
+    'Fit/Red channel 2':   'Red autocorrelation',
+    'Fit channel 1>2':     'Cross-correlation',
+}
+avg_biorep['Channel'] = avg_biorep['Channel'].map(channel_labels).fillna(avg_biorep['Channel'])
 
-def _purple_palette(series):
-    order = ['Fit/Green channel 1', 'Fit/Red channel 2', 'Fit channel 1>2']
-    present = [c for c in order if c in set(series.unique())]
-    cmap = plt.get_cmap("Purples")
-    colors = cmap(np.linspace(0.45, 0.95, len(present))) if present else []
-    return dict(zip(present, colors)), present
+# Rename samples for display
+sample_labels = {
+    'Dendra+mCherry': 'Dendra + mCherry',
+    'FL1':            'FL1 (cell lysate)',
+    'UT/Control':     'Untransfected',
+}
+avg_biorep['Sample'] = avg_biorep['Sample'].map(sample_labels).fillna(avg_biorep['Sample'])
 
-def _apply_manual_legend(fig, palette, order, title="Channel", loc="center right"):
-    handles = [Line2D([0], [0], color=palette[label], lw=3, label=label) for label in order]
-    
-    fig.subplots_adjust(right=0.82)
-    fig.legend(handles=handles, title=title, loc=loc, bbox_to_anchor=(0.92, 0.5))
-    return handles
+# Define orders for the grid
+sample_order   = ['Dendra + mCherry', 'FL1 (cell lysate)', 'Untransfected']
+location_order = ['Dibbot', 'Well']
+channel_order  = ['Green autocorrelation', 'Red autocorrelation', 'Cross-correlation']
 
-
-def plot_by_location(sample='Dendra+mCherry', use='biorep'):
-    data = avg_biorep if use == 'biorep' else avg_simple
-    sub = data[data['Sample'].str.lower() == sample.lower()].copy()
-    if sub.empty:
-        print(f"No data found for sample '{sample}'")
-        return
-
-    pal, order = _purple_palette(sub["Channel"])
-
-    g = sns.FacetGrid(
-        sub,
-        col="Location",         
-        hue="Channel",          
-        palette=pal,
-        sharey=False,
-        height=4,
-        aspect=1.2,
-    )
-
-    def _draw(data, color=None, **kws):
-        plt.plot(data['Time [ms]'], data['mean'], color=color)
-        if 'sd' in data and data['sd'].notna().any():
-            lo = data['mean'] - data['sd']
-            hi = data['mean'] + data['sd']
-            plt.fill_between(data['Time [ms]'], lo, hi, alpha=0.2, color=color)
-        plt.xscale('log')
-        plt.xlabel('Time [ms]')
-        plt.ylabel('Value')
-
-    g.map_dataframe(_draw)
-
-   
-    _apply_manual_legend(g.fig, pal, order, title="Channel")
-    if g._legend is not None:
-        g._legend.remove()
-
-    g.fig.subplots_adjust(top=0.85)
-    g.fig.suptitle(f"{sample}: {'Bio-rep mean±SD' if use=='biorep' else 'Simple mean±SD'}")
-    plt.show()
-
-def plot_panel_all(use='biorep', samples_order=None):
-    data = avg_biorep if use == 'biorep' else avg_simple
-
-    detected = list(data['Sample'].dropna().unique())
-    default_order = [s for s in ["Dendra+mCherry", "FL1", "UT/Control"] if s in detected]
-    for s in detected:
-        if s not in default_order:
-            default_order.append(s)
-    samples_order = samples_order or default_order
-
-    sub = data[data['Sample'].isin(samples_order)].copy()
-    if sub.empty:
-        print("No data to plot. Check your manifest and parsing.")
-        return
-
-    pal, order = _purple_palette(sub["Channel"])
-    sub["FacetKey"] = sub["Sample"] + " • " + sub["Location"]
-
-    g = sns.FacetGrid(
-        sub,
-        col="FacetKey",
-        col_wrap=2,      
-        hue="Channel",
-        palette=pal,
-        sharex=True,
-        sharey=False,
-        height=4,
-        aspect=1.2,
-    )
-
-    def _draw(data, color=None, **kws):
-        plt.plot(data["Time [ms]"], data["mean"], color=color)
-        if "sd" in data and data["sd"].notna().any():
-            lo = data["mean"] - data["sd"]
-            hi = data["mean"] + data["sd"]
-            plt.fill_between(data["Time [ms]"], lo, hi, alpha=0.2, color=color)
-        plt.xscale("log")
-        plt.xlabel("Time [ms]")
-        plt.ylabel("Value")
-
-    g.map_dataframe(_draw)
-
-   
-    _apply_manual_legend(g.fig, pal, order, title="Channel")
-    if g._legend is not None:
-        g._legend.remove()
-
-    g.fig.subplots_adjust(top=0.9)
-    g.fig.suptitle(f"Combined datasets ({'Bio-rep mean±SD' if use=='biorep' else 'Simple mean±SD'})")
-
-    g.fig.savefig("combined_plot.svg", format="svg", dpi=300)
-    plt.show()
-
-if __name__ == "__main__":
-    plot_panel_all(use='biorep')
-
-
-
-
-  
-def export_tidy_excels():
-    # where to save
-    output_dir = r"C:\Users\trowy\OneDrive\Desktop\2024 and 2025 PhD\Python\Data combined\FCCS"
-    os.makedirs(output_dir, exist_ok=True)
-
-    # export each tidy file from manifest
-    for fp, lbl in manifest:
-        tidy = _read_one_fcs(fp, lbl)
-        if tidy is None or tidy.empty:
-            continue
-        base = PureWindowsPath(fp).stem
-        out_path = os.path.join(output_dir, f"{base}_tidy.xlsx")
-        tidy.to_excel(out_path, index=False)
-
-    # export combined data tables
-    all_long.to_excel(os.path.join(output_dir, "all_long_combined.xlsx"), index=False)
-    per_file.to_excel(os.path.join(output_dir, "per_file_means.xlsx"), index=False)
-    avg_biorep.to_excel(os.path.join(output_dir, "avg_biorep_means.xlsx"), index=False)
-
-    print(f"✅ Saved cleaned files to:\n{output_dir}")
-
-if __name__ == "__main__":
-    export_tidy_excels()
-
-############################################Aleksa start here###########################################
-#Plotting just from saved excels
-#Is for university laptop
-#%%
-import os
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.lines import Line2D
-
-sns.set_theme(style="white", context="notebook")
-
-# Folder path
-DATA_DIR = r"C:\Users\jwt149\Desktop\FCCS\FCCS"
-
-# Load file
-data = pd.read_excel(os.path.join(DATA_DIR, "avg_biorep_means.xlsx"))
-
-def _purple_palette(series):
-    order = ['Fit/Green channel 1', 'Fit/Red channel 2', 'Fit channel 1>2']
-    present = [c for c in order if c in set(series.unique())]
-    cmap = plt.get_cmap("Purples")
-    colors = cmap(np.linspace(0.45, 0.95, len(present)))
-    return dict(zip(present, colors)), present
-
-# Manual colour mapping
+# Colour palette
 pal = {
-    'Fit/Green channel 1': '#9B59B6',   # Purple
-    'Fit/Red channel 2': '#E7549E',     # Pink
-    'Fit channel 1>2': '#00A6D6'        # Blue (cross-correlation)
+    'Green autocorrelation': '#9B59B6',  # Purple
+    'Red autocorrelation':   '#E7549E',  # Pink
+    'Cross-correlation':     '#00A6D6',  # Blue
 }
 
-# Keep only channels that exist in your data
-order = [c for c in pal.keys() if c in data["Channel"].unique()]
-data["FacetKey"] = data["Sample"] + " • " + data["Location"]
+# ============================================================================
+# PLOTTING — rows = Location, cols = Sample
+# ============================================================================
+# Filter to only conditions present in data
+locations_present = [l for l in location_order if l in avg_biorep['Location'].unique()]
+samples_present   = [s for s in sample_order   if s in avg_biorep['Sample'].unique()]
+channels_present  = [c for c in channel_order  if c in avg_biorep['Channel'].unique()]
 
-g = sns.FacetGrid(
-    data,
-    col="FacetKey",
-    col_wrap=2,
-    hue="Channel",
-    palette=pal,
+nrows = len(locations_present)
+ncols = len(samples_present)
+
+fig, axes = plt.subplots(
+    nrows, ncols,
+    figsize=(ncols * 5 * cm + 4, nrows * 4.5 * cm + 2),
     sharex=True,
     sharey=False,
-    height=4,
-    aspect=1.2,
+    squeeze=False,
 )
 
-def _draw(data, color=None, **kws):
-    plt.plot(data["Time [ms]"], data["mean"], color=color)
-    if data["sd"].notna().any():
-        lo = data["mean"] - data["sd"]
-        hi = data["mean"] + data["sd"]
-        plt.fill_between(data["Time [ms]"], lo, hi, alpha=0.2, color=color)
-    plt.xscale("log")
-    plt.xlabel("Time [ms]")
-    plt.ylabel("Value")
+for i, loc in enumerate(locations_present):
+    for j, samp in enumerate(samples_present):
+        ax = axes[i, j]
+        sub = avg_biorep[(avg_biorep['Location'] == loc) &
+                         (avg_biorep['Sample'] == samp)]
 
-g.map_dataframe(_draw)
+        for ch in channels_present:
+            ch_data = sub[sub['Channel'] == ch].sort_values('Time [ms]')
+            if ch_data.empty:
+                continue
+            t = ch_data['Time [ms]'].values
+            m = ch_data['mean'].values
+            s = ch_data['sd'].values
 
-handles = [Line2D([0], [0], color=pal[label], lw=3, label=label) for label in order]
-g.fig.subplots_adjust(right=0.82)
-g.fig.legend(handles=handles, title="Channel", loc="center right", bbox_to_anchor=(0.92, 0.5))
+            ax.plot(t, m, color=pal[ch], linewidth=1)
+            if np.any(np.isfinite(s)):
+                ax.fill_between(t, m - s, m + s, alpha=0.2, color=pal[ch])
 
-g.fig.suptitle("Combined datasets (Bio-rep mean±SD)")
-g.fig.savefig(os.path.join(DATA_DIR, "combined_plot.svg"), format="svg", dpi=300)
+        ax.set_xscale('log')
 
+        # Column titles (top row only)
+        if i == 0:
+            ax.set_title(samp, fontsize=8, fontweight='bold')
+
+        # Row labels (left column only)
+        if j == 0:
+            ax.set_ylabel(f'{loc}\nG(\u03c4)', fontsize=7)
+        else:
+            ax.set_ylabel('')
+
+        # X-axis label (bottom row only)
+        if i == nrows - 1:
+            ax.set_xlabel('\u03c4 (ms)', fontsize=7)
+        else:
+            ax.set_xlabel('')
+
+        sns.despine(ax=ax)
+
+# Shared legend along the bottom
+handles = [Line2D([0], [0], color=pal[c], lw=2, label=c) for c in channels_present]
+fig.legend(handles=handles, loc='lower center', ncol=len(channels_present),
+           fontsize=7, frameon=False,
+           bbox_to_anchor=(0.5, -0.02))
+
+fig.suptitle('FCCS correlation curves (bio-rep mean \u00b1 SD)',
+             fontsize=9, fontweight='bold')
+fig.tight_layout(rect=[0, 0.05, 1, 0.95])
+
+fig.savefig(os.path.join(output_folder, 'fccs_combined_plot.svg'),
+            format='svg', dpi=300, bbox_inches='tight')
 plt.show()
-
-
-output_path = r"C:\Users\jwt149\Desktop\FCCS\My_Final_Figure.svg"
-
-g.fig.savefig(output_path, format="svg", dpi=300, bbox_inches="tight")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# %%

@@ -1,235 +1,260 @@
-##################################All for Aleksa#######################
-##################################
-##################################
-##################################
-#This makes FCCS curves of 5 to 35 mins
+"""
+FCCS Plotter – TEV Protease Time Course
+Generates 3 plots:
+  1. Panel plot: All channels (autocorrelation + cross-correlation) per time point
+  2. Overlay plot: Cross-correlation (Ch1→2) across time points with blue gradient
+  3. Endpoint scatter: G(τ) at end of each cross-correlation curve vs time
+
+All customization is in the SETTINGS section below.
+"""
+
 import os
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
+import re
 import math
+import pandas as pd
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib import cm
+from matplotlib.colors import Normalize
+from matplotlib.lines import Line2D
+from matplotlib.ticker import LogLocator, LogFormatter
 
 # ============================================================================
 # FIGURE SETTINGS
 # ============================================================================
+sns.set_theme(style="white", context="notebook")
 font = {'family': 'arial', 'weight': 'normal', 'size': 8}
 matplotlib.rc('font', **font)
 plt.rcParams['svg.fonttype'] = 'none'
 plt.rcParams['figure.dpi'] = 300
-cm = 1/2.54
+cm_unit = 1 / 2.54
 
-DATA_DIR = r"C:/Users/jwt149/Desktop/Tev protease excel files cleaned up from python"
-sns.set_theme(style="white", context="notebook")
+# ============================================================================
+# PATHS
+# ============================================================================
+root_path = open('experimental_data/experiment_index.txt', 'r').readlines()[0].strip()
+output_folder = f'{root_path}FFigures/'
+os.makedirs(output_folder, exist_ok=True)
 
-# List all Excel files
-cleaned_files = [os.path.join(DATA_DIR, f) 
-                 for f in os.listdir(DATA_DIR) 
-                 if f.endswith(".xlsx")]
+# --- LIST YOUR DATA FILES HERE (relative to root_path) --------------------
+# Each entry: (relative_path, time_in_minutes)
+# time_in_minutes is used for ordering and labelling
+manifest = [
+    ('250702 dibbot 1in75 5 mins_cleaned.xlsx',  5),
+    ('250702 dibbot 1in75 10 mins_cleaned.xlsx', 10),
+    ('250702 dibbot 1in75 15 mins_cleaned.xlsx', 15),
+    ('250702 dibbot 1in75 20 mins_cleaned.xlsx', 20),
+    ('250702 dibbot 1in75 25 mins_cleaned.xlsx', 25),
+    ('250702 dibbot 1in75 30 mins_cleaned.xlsx', 30),
+    ('250702 dibbot 1in75 35 mins_cleaned.xlsx', 35),
+]
 
-if not cleaned_files:
-    print("No Excel files found in the folder!")
-else:
-    ncols = 2
-    n = min(len(cleaned_files), 7)
-    nrows = math.ceil(n / ncols)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 4*nrows))
-    axes = axes.flatten() if n > 1 else [axes]
+# ============================================================================
+# PLOT SETTINGS
+# ============================================================================
 
-    # Define custom colors for each channel
-    channel_colors = {
-        'Fit Channel 1': '#9B59B6',       # Purple
-        'Fit Channel 2': '#E7549E',       # Pink
-        'Fit Channel 1 -> 2': '#00A6D6'   # Blue
-    }
+# Channel colours
+channel_colors = {
+    'Fit Channel 1':      '#9B59B6',  # Purple  (autocorrelation ch1)
+    'Fit Channel 2':      '#E7549E',  # Pink    (autocorrelation ch2)
+    'Fit Channel 1 -> 2': '#00A6D6',  # Blue    (cross-correlation)
+}
 
-    for fp, ax in zip(cleaned_files[:7], axes):
-        df = pd.read_excel(fp)
-        sns.lineplot(
-            data=df,
-            x='Time [ms]',
-            y='Value',
-            hue='Channel',
-            ci='sd',
-            palette=channel_colors,
-            ax=ax
-        )
-        ax.set_xscale('log')  # log x-axis
-        ax.set_title(os.path.basename(fp))
-        ax.set_xlabel('Time [ms]')
-        ax.set_ylabel('G(t)')
-        leg = ax.get_legend()
-        if leg:
-            leg.remove()
-        ax.grid(False)
+# Channel display labels
+channel_labels = {
+    'Fit Channel 1':      'Green autocorrelation',
+    'Fit Channel 2':      'Red autocorrelation',
+    'Fit Channel 1 -> 2': 'Cross-correlation',
+}
 
-    # Remove extra axes if fewer than grid
-    for ax in axes[n:]:
-        fig.delaxes(ax)
+# Panel plot
+PANEL_FIG_WIDTH_PER_COL = 5   # cm
+PANEL_FIG_HEIGHT_PER_ROW = 4.5  # cm
 
-    plt.tight_layout()
+# Overlay plot (cross-correlation across timepoints)
+OVERLAY_FIG_SIZE = (8, 5)
+OVERLAY_CHANNEL = 'Fit Channel 1 -> 2'
+OVERLAY_CMAP = 'Blues_r'
+OVERLAY_LINE_WIDTH = 2
 
-    svg_path = os.path.join(OUTPUT_DIR, "panel_plot.svg")
-    fig.savefig(svg_path, format="svg", dpi=300, bbox_inches="tight")
-    print(f"Saved panel plot → {svg_path}")
+# Endpoint scatter
+SCATTER_FIG_SIZE = (7.5, 5)
+SCATTER_CMAP = 'Blues'
+SCATTER_MARKER_SIZE = 80
+SCATTER_XLIM = (0, 40)
 
-    plt.show()
-##################################
-##################################
-##################################
+# How to extract the scatter value from each cross-correlation curve:
+#   'max'   = peak amplitude of the curve (highest G(τ))
+#   'first' = G(τ) at shortest lag time
+#   'last'  = G(τ) at longest lag time
+ENDPOINT_METHOD = 'max'
 
-##################################
-##################################
-##################################
-#Cross correlation FCS curves from 5 min to 35 mins
-import os, glob
-import re
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib.ticker import LogLocator, LogFormatter
-from matplotlib.colors import Normalize
+# Spine / tick formatting (shared)
+SPINE_WIDTH = 1.5
+TICK_DIRECTION = 'out'
+TICK_LENGTH = 6
+TICK_WIDTH = 1.2
 
-DATA_DIR = r"C:/Users/jwt149/Desktop/Tev protease excel files cleaned up from python"
-OUTPUT_DIR = r"C:/Users/jwt149/Desktop/Tev protease excel files cleaned up from python/Output"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# get all Excel files
-excel_files = glob.glob(os.path.join(DATA_DIR, "*.xlsx"))
-
-# extract times from filenames and sort by time
+# ============================================================================
+# LOAD DATA
+# ============================================================================
 file_times = []
-for fp in excel_files:
-    match = re.search(r'(\d+)\s*min', os.path.basename(fp))
-    if match:
-        file_times.append((int(match.group(1)), fp))
+for rel_path, t_min in manifest:
+    fp = os.path.join(root_path, rel_path)
+    file_times.append((t_min, fp))
 file_times.sort(key=lambda x: x[0])
 
-# reversed colormap
-cmap = cm.get_cmap('Blues_r')
+times = [t for t, _ in file_times]
+print(f"Found {len(file_times)} files: {times} min")
 
-# define the gradient mapping: 5 min = darkest, 35 min = color at 25 min
-times = [t for t,_ in file_times]
+# ============================================================================
+# PLOT 1 – Panel plot (all channels per timepoint, excluding 35 min)
+# ============================================================================
+PANEL_NCOLS = 3
+panel_times = [(t, fp) for t, fp in file_times if t != 35]
+n = len(panel_times)
+nrows = math.ceil(n / PANEL_NCOLS)
+
+fig1, axes = plt.subplots(
+    nrows, PANEL_NCOLS,
+    figsize=(PANEL_NCOLS * PANEL_FIG_WIDTH_PER_COL * cm_unit + 4,
+             nrows * PANEL_FIG_HEIGHT_PER_ROW * cm_unit + 2),
+    sharex=True, sharey=True, squeeze=False,
+)
+axes_flat = axes.flatten()
+
+for idx, (t, fp) in enumerate(panel_times):
+    ax = axes_flat[idx]
+    df = pd.read_excel(fp)
+
+    for ch, color in channel_colors.items():
+        df_ch = df[df['Channel'] == ch]
+        if df_ch.empty:
+            continue
+        df_pivot = df_ch.pivot(index='Time [ms]', columns='Replicate', values='Value')
+        mean_vals = df_pivot.mean(axis=1)
+        std_vals = df_pivot.std(axis=1)
+        ax.plot(df_pivot.index, mean_vals, color=color, linewidth=1)
+        if np.any(np.isfinite(std_vals)):
+            ax.fill_between(df_pivot.index, mean_vals - std_vals, mean_vals + std_vals,
+                            alpha=0.2, color=color)
+
+    ax.set_xscale('log')
+    ax.set_title(f'{t} min', fontsize=8, fontweight='bold')
+
+    # Y-axis label only on left column
+    if idx % PANEL_NCOLS == 0:
+        ax.set_ylabel('G(τ)', fontsize=7)
+    else:
+        ax.set_ylabel('')
+
+    # X-axis label only on bottom row
+    if idx >= n - PANEL_NCOLS:
+        ax.set_xlabel('τ (ms)', fontsize=7)
+    else:
+        ax.set_xlabel('')
+
+    sns.despine(ax=ax)
+
+# Remove empty axes
+for ax in axes_flat[n:]:
+    fig1.delaxes(ax)
+
+# Shared legend
+handles = [Line2D([0], [0], color=v, lw=2, label=channel_labels.get(k, k))
+           for k, v in channel_colors.items()]
+fig1.legend(handles=handles, loc='lower center', ncol=len(channel_colors),
+            fontsize=7, frameon=False, bbox_to_anchor=(0.5, -0.02))
+
+fig1.suptitle('FCCS correlation curves (mean ± SD)', fontsize=9, fontweight='bold')
+fig1.tight_layout(rect=[0, 0.05, 1, 0.95])
+
+out1 = os.path.join(output_folder, 'panel_plot.svg')
+fig1.savefig(out1, format='svg', dpi=300, bbox_inches='tight')
+print(f"Saved → {out1}")
+
+# ============================================================================
+# PLOT 2 – Overlay of cross-correlation curves (time gradient)
+# ============================================================================
+cmap_overlay = plt.get_cmap(OVERLAY_CMAP)
 vmin, vmax = min(times), max(times)
+norm_cap = (25 - vmin) / (vmax - vmin) if vmax != vmin else 1.0
 
-# find normalized value corresponding to 25 min
-norm_25 = (25 - vmin) / (vmax - vmin)
-
-class CustomNormalize(Normalize):
-    """Map vmin->vmax to 0->norm_25 in colormap"""
-    def __init__(self, vmin, vmax, vmax_mapped):
-        super().__init__(vmin=vmin, vmax=vmax)
-        self.vmax_mapped = vmax_mapped  # max colormap fraction for 35 min
-
-    def __call__(self, value, clip=None):
-        normed = (value - self.vmin) / (self.vmax - self.vmin)  # 0->1
-        normed = normed * self.vmax_mapped  # map to 0 -> vmax_mapped
-        return normed
-
-norm = CustomNormalize(vmin=vmin, vmax=vmax, vmax_mapped=norm_25)
-
-fig, ax = plt.subplots(figsize=(8,5))
+fig2, ax2 = plt.subplots(figsize=OVERLAY_FIG_SIZE)
 
 for t, fp in file_times:
     df = pd.read_excel(fp)
-    df_ch = df[df['Channel'].str.startswith('Fit Channel 1 -> 2')]
+    df_ch = df[df['Channel'].str.startswith(OVERLAY_CHANNEL)]
+    if df_ch.empty:
+        continue
     df_pivot = df_ch.pivot(index='Time [ms]', columns='Replicate', values='Value')
     mean_vals = df_pivot.mean(axis=1)
     std_vals = df_pivot.std(axis=1)
-    
-    color = cmap(norm(t))
-    ax.plot(df_pivot.index, mean_vals, color=color, lw=2, solid_capstyle='round', label=f"{t} min")
-    ax.fill_between(df_pivot.index, mean_vals - std_vals, mean_vals + std_vals, color=color, alpha=0.3)
 
-# log-x axis
-ax.set_xscale('log')
-ax.set_xlabel('Time [ms]')
-ax.set_ylabel('G(t)')
-ax.set_title('Channel 1 -> 2: mean ± SD per file')
-ax.tick_params(axis='both', which='both', direction='out', length=6, width=1.5)
-ax.xaxis.set_major_locator(LogLocator(base=10, numticks=12))
-ax.xaxis.set_minor_locator(LogLocator(base=10, subs=range(2,10), numticks=100))
-ax.xaxis.set_major_formatter(LogFormatter())
-ax.grid(False)
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-ax.legend(title="Time", fontsize=8)
+    frac = ((t - vmin) / (vmax - vmin)) * norm_cap if vmax != vmin else 0
+    color = cmap_overlay(frac)
 
-# save as SVG
-out_fp = os.path.join(OUTPUT_DIR, "overlay_channel1to2_meanSD_timeGradient_custom.svg")
-fig.savefig(out_fp, format='svg', dpi=300, bbox_inches='tight')
-print(f"Saved overlay plot → {out_fp}")
+    ax2.plot(df_pivot.index, mean_vals, color=color, lw=OVERLAY_LINE_WIDTH,
+             solid_capstyle='round', label=f"{t} min")
+    ax2.fill_between(df_pivot.index, mean_vals - std_vals, mean_vals + std_vals,
+                     color=color, alpha=0.3)
 
-plt.show()
-##################################
-##################################
-##################################
+ax2.set_xscale('log')
+ax2.set_xlabel('τ (ms)')
+ax2.set_ylabel('G(τ)')
+ax2.xaxis.set_major_locator(LogLocator(base=10, numticks=12))
+ax2.xaxis.set_minor_locator(LogLocator(base=10, subs=range(2, 10), numticks=100))
+ax2.xaxis.set_major_formatter(LogFormatter())
+ax2.legend(title="Time", fontsize=8, frameon=False)
+sns.despine(ax=ax2)
 
+fig2.tight_layout()
+out2 = os.path.join(output_folder, 'overlay_cross_correlation.svg')
+fig2.savefig(out2, format='svg', dpi=300, bbox_inches='tight')
+print(f"Saved → {out2}")
 
-##################################
-##################################
-##################################
-#Need to run line graph before this
-#Dot points of each tev protease time
-import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib.colors import Normalize
+# ============================================================================
+# PLOT 3 – Endpoint scatter (G(τ) amplitude per cross-correlation curve)
+# ============================================================================
+endpoints = {}
+for t, fp in file_times:
+    df = pd.read_excel(fp)
+    df_ch = df[df['Channel'].str.startswith(OVERLAY_CHANNEL)]
+    if df_ch.empty:
+        continue
+    df_pivot = df_ch.pivot(index='Time [ms]', columns='Replicate', values='Value')
+    mean_vals = df_pivot.mean(axis=1)
+    if ENDPOINT_METHOD == 'max':
+        endpoints[t] = mean_vals.max()
+    elif ENDPOINT_METHOD == 'first':
+        endpoints[t] = mean_vals.iloc[0]
+    else:
+        endpoints[t] = mean_vals.iloc[-1]
 
-last_points = {5: 0.005, 10: 0.0035, 15: 0.0027, 20: 0.0023, 25: 0.0020, 30: 0.0015, 35: 0.001}
+scatter_times = sorted(endpoints.keys())
+scatter_vals = [endpoints[t] for t in scatter_times]
 
-desired_mins = list(last_points.keys())
+# Dark → light blue gradient (early = dark, late = light)
+scatter_cmap = plt.get_cmap(SCATTER_CMAP)
+scatter_norm = Normalize(vmin=min(scatter_times), vmax=max(scatter_times))
+scatter_colors = [scatter_cmap(0.9 - scatter_norm(m) * 0.7) for m in scatter_times]
 
-# Blue gradient: 5 min darkest, 35 min lightest
-cmap = cm.get_cmap('Blues')
-norm = Normalize(vmin=min(desired_mins), vmax=max(desired_mins))
-colors = {m: cmap(1 - norm(m) * 0.7) for m in desired_mins}  # compress gradient
+fig3, ax3 = plt.subplots(figsize=SCATTER_FIG_SIZE)
+ax3.scatter(scatter_times, scatter_vals, c=scatter_colors, s=SCATTER_MARKER_SIZE,
+            zorder=3)
 
-fig, ax = plt.subplots(figsize=(7.5,5))
-for m in desired_mins:
-    ax.scatter(m, last_points[m], color=colors[m], s=80, label=f"{m} min")
+ax3.set_xlabel('Time (min)')
+ax3.set_ylabel('G(τ) at end of curve')
+ax3.set_xticks(scatter_times)
+ax3.set_xlim(*SCATTER_XLIM)
+sns.despine(ax=ax3)
 
-ax.set_xlabel("Time (min)")
-ax.set_ylabel("G(t) at end of curve")
-ax.set_title("End-point values from line graph")
-ax.set_xticks(desired_mins)
-ax.set_xlim(0, 40)
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-ax.spines['bottom'].set_linewidth(1.5)
-ax.spines['left'].set_linewidth(1.5)
-ax.tick_params(axis='both', which='both', direction='out', length=6, width=1.2)
-ax.legend(title="Time", frameon=False)
-ax.grid(False)
-
-out_fp = os.path.join(OUTPUT_DIR, "overlay_channel1to2_meanSD_timeGradient_custom.svg")
-fig.savefig(out_fp, format='svg', dpi=300, bbox_inches='tight')
-print(f"Saved overlay plot → {out_fp}")
+fig3.tight_layout()
+out3 = os.path.join(output_folder, 'endpoint_scatter.svg')
+fig3.savefig(out3, format='svg', dpi=300, bbox_inches='tight')
+print(f"Saved → {out3}")
 
 plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# %%
+print(f"\nDone! All plots saved to: {output_folder}")
