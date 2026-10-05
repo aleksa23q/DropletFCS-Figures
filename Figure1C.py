@@ -1,6 +1,6 @@
-# Figure 1: Top-decile boundary coating ratio - two-panel (488 + 647)
+# Figure 1: Boundary/ interior intensity ratio (488 + 594)
 # Metric: mean of top 10% brightest boundary ring pixels (bgsub) / interior mean (bgsub).
-# requires Figures1C_FINAL folder  
+# requires boundary_pixels_488.csv, inside_pixels_488.csv, boundary_pixels_594.csv, inside_pixels_594.csv  
 # /Users/aleksalakic/Desktop/Figure1C_FINAL/
 
 import os
@@ -18,10 +18,9 @@ input_folder = f'{root_path}Results_2/'
 output_folder = f'{root_path}Figures/'
 os.makedirs(output_folder, exist_ok=True)
 
-# Switch between 'coating_ratio_decile' (top 10%) and 'coating_ratio_percentile' (top 1%)
-metric = 'coating_ratio_decile'
-ylabel_text = 'Topx-decile boundary / interior intensity' if metric == 'coating_ratio_decile' \
-              else 'Top-percentile boundary / interior intensity'
+
+metric = 'coating_ratio'
+ylabel_text = 'Boundary / interior intensity'
 
 
 def load_and_process(boundary_file, inside_file):
