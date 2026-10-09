@@ -159,27 +159,4 @@ print(f"Saved panel plot → {svg_path}")
 
 
 
-
-
-
-
-# %%
-import pandas as pd
-import os
-
-rows = []
-
-for cond, files in condition_groups.items():
-    for fp in files:
-        df = pd.read_excel(fp)
-
-        rows.append({
-            "file": os.path.basename(fp),
-            "condition": cond,
-            "replicates_in_file": df["Replicate"].nunique(),
-            "timepoints_in_file": df["Time [ms]"].nunique()
-        })
-
-file_table = pd.DataFrame(rows).sort_values(["condition", "file"])
-print(file_table.to_string(index=False))
 # %%
