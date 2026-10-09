@@ -1,4 +1,4 @@
-#/Users/aleksalakic/Desktop/Figure1C_FINAL/
+#sup figure 9
 
 import os
 import numpy as np
