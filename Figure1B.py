@@ -6,10 +6,10 @@ from skimage import io
 from matplotlib.gridspec import GridSpec
 from matplotlib.patches import Rectangle
 
-image_1_path = "/Users/aleksalakic/Desktop/Figure1_22-05-26/Figure1B_analysis/250305_dibbot_oil_dendra_1_488.tif"
-image_2_path = "/Users/aleksalakic/Desktop/Figure1_22-05-26/Figure1B_analysis/241014_dibbot_OL_dendra_2_488.tif"
-image_3_path = "/Users/aleksalakic/Desktop/Figure1_22-05-26/Figure1B_analysis/241011_dibbot_peglipid_dendra+mCherry_6_488.tif"
-output_folder = "/Users/aleksalakic/Desktop/Figure1_22-05-26/Figure1B_analysis/outputs/"
+image_1_path = "250305_dibbot_oil_dendra_1_488.tif"
+image_2_path = "241014_dibbot_OL_dendra_2_488.tif"
+image_3_path = "241011_dibbot_peglipid_dendra_6_488.tif"
+output_folder = "outputs/"
 os.makedirs(output_folder, exist_ok=True)
 
 pixel_sizes_um = [1.3, 0.65, 0.65]
@@ -89,7 +89,7 @@ for col in range(3):
         ax_line.set_yticklabels([])
     ax_line.tick_params(labelsize=7, direction="in", top=True, right=True)
 
-fig.savefig(f"{output_folder}23apr_line_profiles.png", dpi=300, bbox_inches="tight", facecolor="white")
-fig.savefig(f"{output_folder}23apr_line_profiles.svg", bbox_inches="tight", facecolor="white")
+fig.savefig(f"{output_folder}line_profiles.png", dpi=300, bbox_inches="tight", facecolor="white")
+fig.savefig(f"{output_folder}line_profiles.svg", bbox_inches="tight", facecolor="white")
 print("Saved.")
 plt.show()
