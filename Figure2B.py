@@ -98,9 +98,6 @@ df_plot['Method'] = df_plot['method'].map(label_map)
 
 # ============================================================================
 # DESCRIPTIVE STATS: CV (area) and mean ± SD (eccentricity)
-# CV reported for area (physically interpretable: dispensing reproducibility).
-# Eccentricity is bounded [0,1] and DIB-BOT values are near zero, where CV is
-# inflated by a small denominator and not meaningful — report mean ± SD instead.
 # ============================================================================
 stats_summary = {}
 for method in sorted(df_plot['Method'].unique()):
