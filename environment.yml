@@ -1,0 +1,32 @@
+name: dap
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Python
+  - python=3.10
+  
+  # Core scientific computing
+  - numpy
+  - pandas
+  - scipy
+  
+  # Image processing
+  - scikit-image
+  - opencv
+  
+  # Visualization
+  - matplotlib
+  - seaborn
+  
+  # Interactive viewer for mask editing
+  - napari
+  - pyqt
+  
+  # Logging
+  - loguru
+  
+  # Jupyter (optional, for interactive work)
+  - jupyterlab
+  - ipykernel
